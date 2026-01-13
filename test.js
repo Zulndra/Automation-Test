@@ -29,7 +29,7 @@ assert(
 
 // Test 3: Math test
 assert(
-  2 + 2 === 4, 
+  2 + 5 === 4, 
   'Basic math works'
 );
 
