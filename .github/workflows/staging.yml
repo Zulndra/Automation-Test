@@ -30,7 +30,7 @@ jobs:
         run: npm ci
       
       - name: 🧪 Run tests
-        run: npm test
+        npm test 2>&1 | tee test.log
       
       - name: ✅ Tests passed
         run: echo "✅ All tests passed!"
@@ -40,7 +40,7 @@ jobs:
           npm test 2>&1 | tee test.log
 
       - name: 📤 Upload test log
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-log
@@ -84,8 +84,12 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=staging-latest
       
+      - name: 🏗️ Build image
+        run: |
+          docker build . 2>&1 | tee build.log
+
       - name: 📤 Upload build log
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
@@ -132,8 +136,13 @@ jobs:
     environment: staging
     
     steps:
+
+      - name: 🚀 Deploy
+        run: |
+          ./deploy.sh 2>&1 | tee deploy.log
+
       - name: 📤 Upload deploy log
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: deploy-log
@@ -228,14 +237,13 @@ jobs:
           needs.build-and-push.result == 'failure' ||
           needs.deploy-staging.result == 'failure'
         run: |
-          LOG_FILE=$(ls */*.log 2>/dev/null | head -n 1)
+          LOG_FILE=$(find . -name "*.log" | head -n 1)
 
-          if [ -f "$LOG_FILE" ]; then
-            LOG_CONTENT=$(tail -n 40 "$LOG_FILE" | sed 's/"/\\"/g')
+          if [ -z "$LOG_FILE" ]; then
+            LOG_CONTENT="No log artifact found"
           else
-            LOG_CONTENT="No log file found"
+            LOG_CONTENT=$(tail -n 40 "$LOG_FILE" | sed 's/"/\\"/g')
           fi
-
           curl -H "Content-Type: application/json" \
             -d "{
               \"content\":\"❌ **CI ERROR LOG**\n\`\`\`\n$LOG_CONTENT\n\`\`\`\"
