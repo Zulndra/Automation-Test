@@ -160,12 +160,12 @@ jobs:
   # JOB 5: NOTIFICATION
   # ==========================================
   notify:
-  name: Send Notification
-  needs: [test, build-and-push, deploy-production]
-  runs-on: ubuntu-latest
-  if: always()
+    name: Send Notification
+    needs: [test, build-and-push, deploy-production]
+    runs-on: ubuntu-latest
+    if: always()
 
-  steps:
+    steps:
     - name: ✅ Notify Success
       if: ${{ success() }}
       run: |
@@ -174,17 +174,18 @@ jobs:
           ${{ secrets.DISCORD_WEBHOOK }}
 
     - name: ❌ Notify Failure
-  if: |
-    always() &&
-    (needs.test.result == 'failure' ||
-     needs.build-and-push.result == 'failure' ||
-     needs.deploy-production.result == 'failure')
-  run: |
-    curl -H "Content-Type: application/json" \
-      -d "{
-        \"content\":\"❌ Pipeline gagal:
-        test=${{ needs.test.result }},
-        build=${{ needs.build-and-push.result }},
-        deploy=${{ needs.deploy-production.result }}\"
-      }" \
-      ${{ secrets.DISCORD_WEBHOOK }}
+      if: |
+        always() &&
+        (needs.test.result == 'failure' ||
+         needs.build-and-push.result == 'failure' ||
+         needs.deploy-production.result == 'failure')
+      run: |
+        curl -H "Content-Type: application/json" \
+          -d "{
+            \"content\":\"❌ Pipeline gagal:
+            test=${{ needs.test.result }},
+            build=${{ needs.build-and-push.result }},
+            deploy=${{ needs.deploy-production.result }}\"
+          }" \
+          ${{ secrets.DISCORD_WEBHOOK }}
+
