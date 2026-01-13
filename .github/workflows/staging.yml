@@ -155,18 +155,27 @@ jobs:
           needs.test.result == 'failure' ||
           needs.build-and-push.result == 'failure' ||
           needs.deploy-staging.result == 'failure'
-        run: |
-          curl -H "Content-Type: application/json" \
-            -d '{"content":"❌ Pipeline gagal! Cek job test / build / deploy."}' \
-            ${{ secrets.DISCORD_WEBHOOK }}
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          title: "Staging Deployment"
+          description: "✅ Deployed successfully to staging!"
+          color: 0x00ff00
+          username: "GitHub Actions"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
 
       - name: ✅ Notify Success
         if: |
           needs.test.result == 'success' &&
           needs.build-and-push.result == 'success' &&
           needs.deploy-staging.result == 'success'
-        run: |
-          curl -H "Content-Type: application/json" \
-            -d '{"content":"✅ Pipeline sukses, staging deployed!"}' \
-            ${{ secrets.DISCORD_WEBHOOK }}
-
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: 'failure'
+          title: "Staging Deployment"
+          description: "❌ Deployment failed! Please check logs."
+          color: 0xff0000
+          username: "GitHub Actions"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
