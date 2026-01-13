@@ -193,30 +193,7 @@ jobs:
     needs: [test, build-and-push, deploy-staging]
     runs-on: ubuntu-latest
     if: always()
-
     steps:
-      - name: 📥 Download artifacts
-        uses: actions/download-artifact@v4
-
-      - name: 📄 Send failure log to log channel
-        if: |
-          needs.test.result == 'failure' ||
-          needs.build-and-push.result == 'failure' ||
-          needs.deploy-staging.result == 'failure'
-        run: |
-          LOG_FILE=$(find . -name "*.log" | head -n 1)
-
-          if [ -z "$LOG_FILE" ]; then
-            LOG_CONTENT="No log artifact found"
-          else
-            LOG_CONTENT=$(tail -n 40 "$LOG_FILE" | sed 's/"/\\"/g')
-          fi
-          curl -H "Content-Type: application/json" \
-            -d "{
-              \"content\":\"❌ **CI ERROR LOG**\n\`\`\`\n$LOG_CONTENT\n\`\`\`\"
-            }" \
-            ${{ secrets.DISCORD_LOG_WEBHOOK }}
-
       - name: ✅ Notify Success
         if: |
           needs.test.result == 'success' &&
@@ -247,3 +224,39 @@ jobs:
           username: "GitHub Actions"
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
 
+  # ==========================================
+  # JOB 6: LOG FAILURE
+  # ==========================================
+  notify:
+    name: Send Notification
+    needs: [test, build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: 📥 Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: 🔍 Debug downloaded files
+        run: |
+          echo "Files:"
+          find . -type f
+
+      - name: 📄 Send failure log to log channel
+        if: |
+          needs.test.result == 'failure' ||
+          needs.build-and-push.result == 'failure' ||
+          needs.deploy-staging.result == 'failure'
+        run: |
+          LOG_FILE=$(find . -type f -name "*.log" | head -n 1)
+
+          if [ -z "$LOG_FILE" ]; then
+            LOG_CONTENT="No log artifact found"
+          else
+            LOG_CONTENT=$(tail -n 40 "$LOG_FILE" | sed 's/"/\\"/g')
+          fi
+
+          curl -f -H "Content-Type: application/json" \
+            -d "{
+              \"content\":\"❌ **CI ERROR LOG**\n\`\`\`\n$LOG_CONTENT\n\`\`\`\"
+            }" \
+            ${{ secrets.DISCORD_LOG_WEBHOOK }}
