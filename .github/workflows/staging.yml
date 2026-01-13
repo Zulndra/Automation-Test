@@ -144,32 +144,32 @@ jobs:
   # JOB 4: NOTIFICATION
   # ==========================================
   notify:
-    name: Discord Notification
-    needs: [test]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: ✅ Success Notification
-        if: ${{ needs.deploy-staging.result == 'success' }}
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: ${{ job.status }}
-          title: "Staging Deployment"
-          description: "✅ Deployed successfully to staging!"
-          color: 0x00ff00
-          username: "GitHub Actions"
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-      
-      - name: ❌ Failure Notification
-        if: ${{ needs.deploy-staging.result == 'failure' }}
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: 'failure'
-          title: "Staging Deployment"
-          description: "❌ Deployment failed! Please check logs."
-          color: 0xff0000
-          username: "GitHub Actions"
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+  name: Send Notification
+  needs: [test, build-and-push, deploy-staging]
+  runs-on: ubuntu-latest
+  if: always()
+
+  steps:
+    - name: ✅ Notify Success
+      if: ${{ success() }}
+      run: |
+        curl -H "Content-Type: application/json" \
+          -d '{"content":"✅ Pipeline sukses, staging deployed!"}' \
+          ${{ secrets.DISCORD_WEBHOOK }}
+
+    - name: ❌ Notify Failure
+  if: |
+    always() &&
+    (needs.test.result == 'failure' ||
+     needs.build-and-push.result == 'failure' ||
+     needs.deploy-staging.result == 'failure')
+  run: |
+    curl -H "Content-Type: application/json" \
+      -d "{
+        \"content\":\"❌ Pipeline gagal:
+        test=${{ needs.test.result }},
+        build=${{ needs.build-and-push.result }},
+        deploy=${{ needs.deploy-staging.result }}\"
+      }" \
+      ${{ secrets.DISCORD_WEBHOOK }}
+
