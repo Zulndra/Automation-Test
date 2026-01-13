@@ -144,12 +144,12 @@ jobs:
   # JOB 4: NOTIFICATION
   # ==========================================
   notify:
-    name: Send Notification
-    needs: [test, build-and-push, deploy-staging]
-    runs-on: ubuntu-latest
-    if: always()
+  name: Send Notification
+  needs: [test, build-and-push, deploy-staging]
+  runs-on: ubuntu-latest
+  if: always()
 
-    steps:
+  steps:
     - name: ✅ Notify Success
       if: ${{ success() }}
       run: |
@@ -161,8 +161,8 @@ jobs:
       if: |
         always() &&
         (needs.test.result == 'failure' ||
-         needs.build-and-push.result == 'failure' ||
-         needs.deploy-staging.result == 'failure')
+        needs.build-and-push.result == 'failure' ||
+        needs.deploy-staging.result == 'failure')
       run: |
         curl -H "Content-Type: application/json" \
           -d "{
