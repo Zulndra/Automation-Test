@@ -167,7 +167,7 @@ jobs:
     
     steps:
       - name: ✅ Success Notification
-        if: ${{ needs.deploy-staging.result == 'success' }}
+        if: ${{ needs.deploy-production.result == 'success' }}
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
@@ -179,7 +179,7 @@ jobs:
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
       
       - name: ❌ Failure Notification
-        if: ${{ needs.deploy-staging.result == 'failure' }}
+        if: ${{ needs.deploy-production.result == 'failure' }}
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
