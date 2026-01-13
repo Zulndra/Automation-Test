@@ -161,7 +161,7 @@ jobs:
   # ==========================================
   notify:
     name: Discord Notification
-    needs: [test, build-and-push, deploy-staging]
+    needs: [test, build-and-push, deploy-production]
     runs-on: ubuntu-latest
     if: always()
     
@@ -172,8 +172,8 @@ jobs:
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           status: ${{ job.status }}
-          title: "Staging Deployment"
-          description: "✅ Deployed successfully to staging!"
+          title: "Production Deployment"
+          description: "✅ Deployed successfully to production!"
           color: 0x00ff00
           username: "GitHub Actions"
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
@@ -184,7 +184,7 @@ jobs:
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           status: 'failure'
-          title: "Staging Deployment"
+          title: "production Deployment"
           description: "❌ Deployment failed! Please check logs."
           color: 0xff0000
           username: "GitHub Actions"
