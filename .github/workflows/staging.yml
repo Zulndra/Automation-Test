@@ -37,7 +37,7 @@ jobs:
           npm test 2>&1 | tee test.log
 
       - name: 📤 Upload test log
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-log
@@ -86,7 +86,7 @@ jobs:
           docker build . 2>&1 | tee build.log
 
       - name: 📤 Upload build log
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
@@ -139,7 +139,7 @@ jobs:
           ./deploy.sh 2>&1 | tee deploy.log
 
       - name: 📤 Upload deploy log
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: deploy-log
@@ -242,36 +242,37 @@ jobs:
           find . -type f
 
       - name: 📄 Send failure log to log channel
-        if: |
-          needs.test.result == 'failure' ||
-          needs.build-and-push.result == 'failure' ||
-          needs.deploy-staging.result == 'failure'
-        run: |
           if [ "${{ needs.test.result }}" = "failure" ]; then
+            LOG="test-log/test.log"
             JOB="TEST"
-            LOG_FILE="test-log/test.log"
           elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
+            LOG="build-log/build.log"
             JOB="BUILD"
-            LOG_FILE="build-log/build.log"
           elif [ "${{ needs.deploy-staging.result }}" = "failure" ]; then
+            LOG="deploy-log/deploy.log"
             JOB="DEPLOY"
-            LOG_FILE="deploy-log/deploy.log"
-          else
-            exit 0
           fi
 
-          if [ ! -f "$LOG_FILE" ]; then
-            LOG_CONTENT="Log file not found: $LOG_FILE"
+          if [ -f "$LOG" ]; then
+            LOG_CONTENT=$(tail -n 60 "$LOG")
           else
-            LOG_CONTENT=$(tail -n 40 "$LOG_FILE")
+            LOG_CONTENT="No log file available.
+          This failure happened in a GitHub Action (uses:),
+          which does not generate a log file."
           fi
 
-          LOG_CONTENT=$(echo "$LOG_CONTENT" | head -c 1800)
 
-          jq -n --arg msg "❌ CI ERROR LOG ($JOB)\n\`\`\`\n$LOG_CONTENT\n\`\`\`" \
+          jq -n \
+            --arg msg "❌ CI ERROR LOG ($JOB)
+
+          $LOG_CONTENT
+
+          🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             '{content: $msg}' \
           | curl -f -H "Content-Type: application/json" \
             -d @- \
             ${{ secrets.DISCORD_LOG_WEBHOOK }}
+
+
 
 
