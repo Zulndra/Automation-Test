@@ -227,7 +227,7 @@ jobs:
   # ==========================================
   # JOB 6: LOG FAILURE
   # ==========================================
-  notify:
+  notify-build:
     name: Send Notification
     needs: [test, build-and-push, deploy-staging]
     runs-on: ubuntu-latest
