@@ -247,20 +247,31 @@ jobs:
           needs.build-and-push.result == 'failure' ||
           needs.deploy-staging.result == 'failure'
         run: |
-          LOG_FILE=$(find . -type f -name "*.log" | head -n 1)
-
-          if [ -z "$LOG_FILE" ]; then
-            LOG_CONTENT="No log artifact found"
+          if [ "${{ needs.test.result }}" = "failure" ]; then
+            JOB="TEST"
+            LOG_FILE="test-log/test.log"
+          elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
+            JOB="BUILD"
+            LOG_FILE="build-log/build.log"
+          elif [ "${{ needs.deploy-staging.result }}" = "failure" ]; then
+            JOB="DEPLOY"
+            LOG_FILE="deploy-log/deploy.log"
           else
-            LOG_CONTENT=$(tail -n 30 "$LOG_FILE")
+            exit 0
           fi
 
-          # HARD LIMIT 1800 chars (Discord limit safety)
+          if [ ! -f "$LOG_FILE" ]; then
+            LOG_CONTENT="Log file not found: $LOG_FILE"
+          else
+            LOG_CONTENT=$(tail -n 40 "$LOG_FILE")
+          fi
+
           LOG_CONTENT=$(echo "$LOG_CONTENT" | head -c 1800)
 
-          jq -n --arg msg "❌ CI ERROR LOG\n\`\`\`\n$LOG_CONTENT\n\`\`\`" \
+          jq -n --arg msg "❌ CI ERROR LOG ($JOB)\n\`\`\`\n$LOG_CONTENT\n\`\`\`" \
             '{content: $msg}' \
           | curl -f -H "Content-Type: application/json" \
             -d @- \
             ${{ secrets.DISCORD_LOG_WEBHOOK }}
+
 
