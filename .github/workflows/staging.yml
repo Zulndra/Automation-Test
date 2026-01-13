@@ -252,14 +252,15 @@ jobs:
           if [ -z "$LOG_FILE" ]; then
             LOG_CONTENT="No log artifact found"
           else
-          LOG_CONTENT=$(tail -n 40 "$LOG_FILE" \
-            | sed 's/"/\\"/g' \
-            | sed 's/`/\\`/g' \
-            | tr -cd '\11\12\15\40-\176')
+            LOG_CONTENT=$(tail -n 30 "$LOG_FILE")
           fi
 
-          curl -f -H "Content-Type: application/json" \
-            -d "{
-              \"content\":\"❌ **CI ERROR LOG**\n\`\`\`\n$LOG_CONTENT\n\`\`\`\"
-            }" \
+          # HARD LIMIT 1800 chars (Discord limit safety)
+          LOG_CONTENT=$(echo "$LOG_CONTENT" | head -c 1800)
+
+          jq -n --arg msg "❌ CI ERROR LOG\n\`\`\`\n$LOG_CONTENT\n\`\`\`" \
+            '{content: $msg}' \
+          | curl -f -H "Content-Type: application/json" \
+            -d @- \
             ${{ secrets.DISCORD_LOG_WEBHOOK }}
+
