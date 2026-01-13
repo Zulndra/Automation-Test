@@ -262,19 +262,19 @@ jobs:
             LOG_CONTENT=$(tail -n 60 "$LOG")
           else
             LOG_CONTENT="No log file available.
-      Failure occurred in GitHub Action (uses: step)."
-          fi
+          Failure occurred in GitHub Action (uses: step)."
+              fi
 
-          jq -n \
-            --arg msg "❌ CI ERROR LOG ($JOB)
+              jq -n \
+                --arg msg "❌ CI ERROR LOG ($JOB)
 
-      $LOG_CONTENT
+          $LOG_CONTENT
 
-      🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            '{content: $msg}' \
-          | curl -f -H "Content-Type: application/json" \
-              -d @- \
-              ${{ secrets.DISCORD_LOG_WEBHOOK }}
+          🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                '{content: $msg}' \
+              | curl -f -H "Content-Type: application/json" \
+                  -d @- \
+                  ${{ secrets.DISCORD_LOG_WEBHOOK }}
 
 
 
