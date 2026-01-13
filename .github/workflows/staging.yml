@@ -144,25 +144,32 @@ jobs:
   # JOB 4: NOTIFICATION
   # ==========================================
   notify:
-    name: Send Notification
+    name: Discord Notification
     needs: [test, build-and-push, deploy-staging]
     runs-on: ubuntu-latest
     if: always()
     
     steps:
-      - name: 📢 Notify Success
+      - name: ✅ Success Notification
         if: ${{ needs.deploy-staging.result == 'success' }}
-        run: |
-          echo "✅ Staging deployment successful!"
-          # Kalau ada Discord webhook:
-          # curl -H "Content-Type: application/json" \
-          #   -d '{"content":"✅ Staging deployed successfully!"}' \
-          #   ${{ secrets.DISCORD_WEBHOOK }}
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          title: "Staging Deployment"
+          description: "✅ Deployed successfully to staging!"
+          color: 0x00ff00
+          username: "GitHub Actions"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
       
-      - name: ❌ Notify Failure
+      - name: ❌ Failure Notification
         if: ${{ needs.deploy-staging.result == 'failure' }}
-        run: |
-          echo "❌ Staging deployment failed!"
-          # curl -H "Content-Type: application/json" \
-          #   -d '{"content":"❌ Staging deployment failed!"}' \
-          #   ${{ secrets.DISCORD_WEBHOOK }}
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: 'failure'
+          title: "Staging Deployment"
+          description: "❌ Deployment failed! Please check logs."
+          color: 0xff0000
+          username: "GitHub Actions"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
