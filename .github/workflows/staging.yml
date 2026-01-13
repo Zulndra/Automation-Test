@@ -91,11 +91,35 @@ jobs:
           echo "================================"
 
   # ==========================================
-  # JOB 3: DEPLOY TO STAGING
+  # JOB 3: NOTIFY BUILD
+  # ==========================================
+  notify-build:
+    name: Notify Build Status
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: ✅ Build Success
+        if: needs.build-and-push.result == 'success'
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content":"✅ Build success! Image ready for deploy."}' \
+            ${{ secrets.DISCORD_WEBHOOK }}
+
+      - name: ❌ Build Failed
+        if: needs.build-and-push.result == 'failure'
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content":"❌ Build failed! Image not created."}' \
+            ${{ secrets.DISCORD_WEBHOOK }}
+
+  # ==========================================
+  # JOB 4: DEPLOY TO STAGING
   # ==========================================
   deploy-staging:
     name: Deploy to Staging
-    needs: build-and-push
+    needs: notify-build
     runs-on: ubuntu-latest
     environment: staging
     
@@ -141,7 +165,7 @@ jobs:
           echo "================================"
 
   # ==========================================
-  # JOB 4: NOTIFICATION
+  # JOB 5: NOTIFICATION
   # ==========================================
   notify:
     name: Send Notification
