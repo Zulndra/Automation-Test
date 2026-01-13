@@ -143,30 +143,30 @@ jobs:
   # ==========================================
   # JOB 4: NOTIFICATION
   # ==========================================
-notify:
-  name: Send Notification
-  needs: [test, build-and-push, deploy-staging]
-  runs-on: ubuntu-latest
-  if: always()
+  notify:
+    name: Send Notification
+    needs: [test, build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    if: always()
 
-  steps:
-    - name: ❌ Notify Failure
-      if: |
-        needs.test.result == 'failure' ||
-        needs.build-and-push.result == 'failure' ||
-        needs.deploy-staging.result == 'failure'
-      run: |
-        curl -H "Content-Type: application/json" \
-          -d '{"content":"❌ Pipeline gagal! Cek job test / build / deploy."}' \
-          ${{ secrets.DISCORD_WEBHOOK }}
+    steps:
+      - name: ❌ Notify Failure
+        if: |
+          needs.test.result == 'failure' ||
+          needs.build-and-push.result == 'failure' ||
+          needs.deploy-staging.result == 'failure'
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content":"❌ Pipeline gagal! Cek job test / build / deploy."}' \
+            ${{ secrets.DISCORD_WEBHOOK }}
 
-    - name: ✅ Notify Success
-      if: |
-        needs.test.result == 'success' &&
-        needs.build-and-push.result == 'success' &&
-        needs.deploy-staging.result == 'success'
-      run: |
-        curl -H "Content-Type: application/json" \
-          -d '{"content":"✅ Pipeline sukses, staging deployed!"}' \
-          ${{ secrets.DISCORD_WEBHOOK }}
+      - name: ✅ Notify Success
+        if: |
+          needs.test.result == 'success' &&
+          needs.build-and-push.result == 'success' &&
+          needs.deploy-staging.result == 'success'
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content":"✅ Pipeline sukses, staging deployed!"}' \
+            ${{ secrets.DISCORD_WEBHOOK }}
 
