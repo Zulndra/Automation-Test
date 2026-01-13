@@ -252,7 +252,10 @@ jobs:
           if [ -z "$LOG_FILE" ]; then
             LOG_CONTENT="No log artifact found"
           else
-            LOG_CONTENT=$(tail -n 40 "$LOG_FILE" | sed 's/"/\\"/g')
+          LOG_CONTENT=$(tail -n 40 "$LOG_FILE" \
+            | sed 's/"/\\"/g' \
+            | sed 's/`/\\`/g' \
+            | tr -cd '\11\12\15\40-\176')
           fi
 
           curl -f -H "Content-Type: application/json" \
