@@ -166,26 +166,32 @@ jobs:
     if: always()
 
     steps:
-    - name: ✅ Notify Success
-      if: ${{ success() }}
-      run: |
-        curl -H "Content-Type: application/json" \
-          -d '{"content":"✅ Pipeline sukses, production deployed!"}' \
-          ${{ secrets.DISCORD_WEBHOOK }}
+      - name: ✅ Notify Success
+        if: |
+          needs.test.result == 'success' &&
+          needs.build-and-push.result == 'success' &&
+          needs.deploy-production.result == 'success'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          title: "production Deployment"
+          description: "✅ Deployed successfully to production!"
+          color: 0x00ff00
+          username: "GitHub Actions"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
 
-    - name: ❌ Notify Failure
-      if: |
-        always() &&
-        (needs.test.result == 'failure' ||
-         needs.build-and-push.result == 'failure' ||
-         needs.deploy-production.result == 'failure')
-      run: |
-        curl -H "Content-Type: application/json" \
-          -d "{
-            \"content\":\"❌ Pipeline gagal:
-            test=${{ needs.test.result }},
-            build=${{ needs.build-and-push.result }},
-            deploy=${{ needs.deploy-production.result }}\"
-          }" \
-          ${{ secrets.DISCORD_WEBHOOK }}
-
+      - name: ❌ Notify Failure
+        if: |
+          needs.test.result == 'failure' ||
+          needs.build-and-push.result == 'failure' ||
+          needs.deploy-production.result == 'failure'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: 'failure'
+          title: "production Deployment"
+          description: "❌ Deployment failed! Please check logs."
+          color: 0xff0000
+          username: "GitHub Actions"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
