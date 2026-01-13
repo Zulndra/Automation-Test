@@ -150,11 +150,11 @@ jobs:
     if: always()
 
     steps:
-      - name: ❌ Notify Failure
+      - name: ✅ Notify Success
         if: |
-          needs.test.result == 'failure' ||
-          needs.build-and-push.result == 'failure' ||
-          needs.deploy-staging.result == 'failure'
+          needs.test.result == 'success' &&
+          needs.build-and-push.result == 'success' &&
+          needs.deploy-staging.result == 'success'
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
@@ -165,11 +165,11 @@ jobs:
           username: "GitHub Actions"
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
 
-      - name: ✅ Notify Success
+      - name: ❌ Notify Failure
         if: |
-          needs.test.result == 'success' &&
-          needs.build-and-push.result == 'success' &&
-          needs.deploy-staging.result == 'success'
+          needs.test.result == 'failure' ||
+          needs.build-and-push.result == 'failure' ||
+          needs.deploy-staging.result == 'failure'
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
@@ -179,3 +179,4 @@ jobs:
           color: 0xff0000
           username: "GitHub Actions"
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
