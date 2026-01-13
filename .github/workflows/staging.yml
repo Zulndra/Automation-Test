@@ -195,6 +195,28 @@ jobs:
     if: always()
 
     steps:
+      - name: 📥 Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: 📄 Send failure log to log channel
+        if: |
+          needs.test.result == 'failure' ||
+          needs.build-and-push.result == 'failure' ||
+          needs.deploy-staging.result == 'failure'
+        run: |
+          LOG_FILE=$(find . -name "*.log" | head -n 1)
+
+          if [ -z "$LOG_FILE" ]; then
+            LOG_CONTENT="No log artifact found"
+          else
+            LOG_CONTENT=$(tail -n 40 "$LOG_FILE" | sed 's/"/\\"/g')
+          fi
+          curl -H "Content-Type: application/json" \
+            -d "{
+              \"content\":\"❌ **CI ERROR LOG**\n\`\`\`\n$LOG_CONTENT\n\`\`\`\"
+            }" \
+            ${{ secrets.DISCORD_LOG_WEBHOOK }}
+
       - name: ✅ Notify Success
         if: |
           needs.test.result == 'success' &&
@@ -224,26 +246,4 @@ jobs:
           color: 0xff0000
           username: "GitHub Actions"
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-
-      - name: 📥 Download artifacts
-        uses: actions/download-artifact@v4
-
-      - name: 📄 Send failure log to log channel
-        if: |
-          needs.test.result == 'failure' ||
-          needs.build-and-push.result == 'failure' ||
-          needs.deploy-staging.result == 'failure'
-        run: |
-          LOG_FILE=$(find . -name "*.log" | head -n 1)
-
-          if [ -z "$LOG_FILE" ]; then
-            LOG_CONTENT="No log artifact found"
-          else
-            LOG_CONTENT=$(tail -n 40 "$LOG_FILE" | sed 's/"/\\"/g')
-          fi
-          curl -H "Content-Type: application/json" \
-            -d "{
-              \"content\":\"❌ **CI ERROR LOG**\n\`\`\`\n$LOG_CONTENT\n\`\`\`\"
-            }" \
-            ${{ secrets.DISCORD_LOG_WEBHOOK }}
 
