@@ -145,7 +145,7 @@ jobs:
   # ==========================================
   notify:
     name: Discord Notification
-    needs: [test, build-and-push, deploy-staging]
+    needs: [test]
     runs-on: ubuntu-latest
     if: always()
     
