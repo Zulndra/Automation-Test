@@ -242,6 +242,11 @@ jobs:
           find . -type f
 
       - name: 📄 Send failure log to log channel
+        if: |
+          needs.test.result == 'failure' ||
+          needs.build-and-push.result == 'failure' ||
+          needs.deploy-staging.result == 'failure'
+        run: |
           if [ "${{ needs.test.result }}" = "failure" ]; then
             LOG="test-log/test.log"
             JOB="TEST"
@@ -257,21 +262,20 @@ jobs:
             LOG_CONTENT=$(tail -n 60 "$LOG")
           else
             LOG_CONTENT="No log file available.
-          This failure happened in a GitHub Action (uses:),
-          which does not generate a log file."
+      Failure occurred in GitHub Action (uses: step)."
           fi
-
 
           jq -n \
             --arg msg "❌ CI ERROR LOG ($JOB)
 
-          $LOG_CONTENT
+      $LOG_CONTENT
 
-          🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+      🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             '{content: $msg}' \
           | curl -f -H "Content-Type: application/json" \
-            -d @- \
-            ${{ secrets.DISCORD_LOG_WEBHOOK }}
+              -d @- \
+              ${{ secrets.DISCORD_LOG_WEBHOOK }}
+
 
 
 
