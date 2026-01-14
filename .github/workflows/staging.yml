@@ -283,11 +283,8 @@ jobs:
     name: Create GitHub Issue on Failure
     needs: [test, build-and-push, deploy-staging]
     runs-on: ubuntu-latest
-    if: |
-      needs.test.result == 'failure' ||
-      needs.build-and-push.result == 'failure' ||
-      needs.deploy-staging.result == 'failure'
-
+    if: failure()
+    
     steps:
       - name: 📥 Download artifacts
         uses: actions/download-artifact@v4
