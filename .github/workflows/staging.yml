@@ -325,31 +325,31 @@ create-issue:
           const title = `❌ CI Failure (${process.env.JOB_NAME})`;
           const body = `
           
-    ### 🚨 CI/CD Failure Detected
+        ### 🚨 CI/CD Failure Detected
 
-    **Workflow:** ${context.workflow}
-    **Job:** ${process.env.JOB_NAME}
-    **Branch:** ${context.ref}
-    **Commit:** ${context.sha}
+        **Workflow:** ${context.workflow}
+        **Job:** ${process.env.JOB_NAME}
+        **Branch:** ${context.ref}
+        **Commit:** ${context.sha}
 
-      ---
+          ---
 
-    ### 📄 Error Log
-  \`\`\`
-  ${log}
-  \`\`\`
+        ### 📄 Error Log
+        \`\`\`
+        ${log}
+        \`\`\`
 
-  🔗 **Run URL:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
-            `;
+        🔗 **Run URL:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+                  `;
 
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body,
-              labels: ['ci', 'bug', 'automation']
-            });
-        env:
-          JOB_NAME: ${{ steps.detect.outputs.job }}
+                  await github.rest.issues.create({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title,
+                    body,
+                    labels: ['ci', 'bug', 'automation']
+                  });
+              env:
+                JOB_NAME: ${{ steps.detect.outputs.job }}
 
 
