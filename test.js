@@ -17,7 +17,7 @@ function assert(condition, testName) {
 // Test 1: Check if app.js exists
 const fs = require('fs');
 assert(
-  fs.existsSync('appppp.js'), 
+  fs.existsSync('appPPO.js'), 
   'app.js file exists'
 );
 
