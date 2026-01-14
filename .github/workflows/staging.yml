@@ -275,38 +275,38 @@ jobs:
   # ==========================================
   # JOB 6: PULL REQUEST NOTIFICATION
   # ==========================================
-
-name: Pull Request Notification
-
-on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    name: Pull Request Notification
 
-jobs:
-  notify-pr:
-    name: Notify New Pull Request
-    runs-on: ubuntu-latest
+    on:
+      pull_request:
+        types: [opened, reopened, ready_for_review]
 
-    steps:
-      - name: 📢 Discord PR Notification
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: 'info'
-          title: "🔀 New Pull Request"
-          description: |
-            **${{ github.event.pull_request.title }}**
+    jobs:
+      notify-pr:
+        name: Notify New Pull Request
+        runs-on: ubuntu-latest
 
-            **Repository:** `${{ github.repository }}`
-            **Author:** `${{ github.actor }}`
-            **Source:** `${{ github.event.pull_request.head.ref }}`
-            **Target:** `${{ github.event.pull_request.base.ref }}`
+        steps:
+          - name: 📢 Discord PR Notification
+            uses: sarisia/actions-status-discord@v1
+            with:
+              webhook: ${{ secrets.DISCORD_WEBHOOK }}
+              status: 'info'
+              title: "🔀 New Pull Request"
+              description: |
+                **${{ github.event.pull_request.title }}**
 
-            📝 **Description**
-            ${{ github.event.pull_request.body || 'No description provided.' }}
+                **Repository:** `${{ github.repository }}`
+                **Author:** `${{ github.actor }}`
+                **Source:** `${{ github.event.pull_request.head.ref }}`
+                **Target:** `${{ github.event.pull_request.base.ref }}`
 
-            🔗 **Pull Request URL**
-            ${{ github.event.pull_request.html_url }}
-          color: 0x3498db
-          username: "PR Bot"
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                📝 **Description**
+                ${{ github.event.pull_request.body || 'No description provided.' }}
+
+                🔗 **Pull Request URL**
+                ${{ github.event.pull_request.html_url }}
+              color: 0x3498db
+              username: "PR Bot"
+              avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
