@@ -8,6 +8,12 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+permissions:
+  contents: read
+  packages: write
+  issues: write
+  pull-requests: write
+
 jobs:
   # ==========================================
   # JOB 1: TESTING
@@ -28,12 +34,29 @@ jobs:
       
       - name: 📦 Install dependencies
         run: npm ci
-      
+
       - name: 🧪 Run tests
-        run: npm test
+        id: test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+
+      - name: 📤 Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: test.log
       
-      - name: ✅ Tests passed
-        run: echo "✅ All tests passed!"
+      - name: ✅ Tests result
+        if: always()
+        run: |
+          if [ "${{ steps.test.outcome }}" = "failure" ]; then
+            echo "❌ Tests failed!"
+            exit 1
+          else
+            echo "✅ All tests passed!"
+          fi
 
   # ==========================================
   # JOB 2: BUILD & PUSH DOCKER IMAGE
@@ -46,9 +69,6 @@ jobs:
       contents: read
       packages: write
     
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-    
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v3
@@ -56,14 +76,14 @@ jobs:
       - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       
-      - name: 🔑 Login to GitHub Container Registry
+      - name: 🔑 Login to GHCR
         uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: 🏷️ Extract metadata for Docker
+      - name: 🏷️ Extract metadata
         id: meta
         uses: docker/metadata-action@v4
         with:
@@ -73,7 +93,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=staging-latest
       
-      - name: 🏗️ Build and push Docker image
+      - name: 🏗️ Build and push
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -82,13 +102,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      
-      - name: ✅ Image built and pushed
-        run: |
-          echo "================================"
-          echo "✅ Docker image pushed to GHCR!"
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "================================"
 
   # ==========================================
   # JOB 3: DEPLOY TO STAGING
@@ -100,83 +113,161 @@ jobs:
     environment: staging
     
     steps:
-      - name: 🚀 Deploy to Staging Server
+      - name: 🚀 Deploy to Staging
         run: |
-          echo "================================"
-          echo "🚀 Deploying to STAGING..."
-          echo "================================"
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging-latest"
-          echo "Environment: staging"
-          echo "Time: $(date)"
-          
-          # SIMULASI DEPLOY
-          # Nanti di sini command untuk SSH ke server dan pull image
-          
-          # Contoh real command (uncomment kalau sudah punya server):
-          # ssh user@staging-server << 'EOF'
-          #   docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging-latest
-          #   docker stop my-app || true
-          #   docker rm my-app || true
-          #   docker run -d \
-          #     --name my-app \
-          #     -p 3000:3000 \
-          #     -e NODE_ENV=staging \
-          #     ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging-latest
-          # EOF
-          
+          echo "Deploying to staging..."
           echo "✅ Deployment completed!"
-      
-      - name: 🧪 Health Check
-        run: |
-          echo "Running health check..."
-          # Contoh:
-          # sleep 10
-          # curl --fail http://staging-server:3000/health || exit 1
-          echo "✅ Health check passed!"
-      
-      - name: ✅ Staging deployment successful
-        run: |
-          echo "================================"
-          echo "🎉 STAGING DEPLOYMENT SUCCESS!"
-          echo "================================"
 
   # ==========================================
-  # JOB 4: NOTIFICATION
+  # JOB 4: SUCCESS NOTIFICATION
   # ==========================================
-  notify:
-    name: Send Notification
+  notify-success:
+    name: Success Notification
     needs: [test, build-and-push, deploy-staging]
     runs-on: ubuntu-latest
-    if: always()
+    if: |
+      needs.test.result == 'success' &&
+      needs.build-and-push.result == 'success' &&
+      needs.deploy-staging.result == 'success'
+    
+    steps:
+      - name: ✅ Discord Success
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: 'success'
+          title: "🚀 Staging Deployment Successful"
+          description: |
+            **Deployment completed successfully!**
+
+            **Environment:** `staging`  
+            **Branch:** `${{ github.ref_name }}`  
+            **Commit:** [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})  
+            **Triggered by:** `${{ github.actor }}`
+
+            🔗 **Actions Run:**  
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          color: 0x2ecc71
+          username: "CI/CD Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
+
+  # ==========================================
+  # JOB 5: FAILURE HANDLER (MAIN JOB)
+  # ==========================================
+  handle-failure:
+    name: Handle Failure
+    needs: [test, build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    if: failure()
+
+    permissions:
+      issues: write
+      contents: read
 
     steps:
-      - name: ✅ Notify Success
-        if: |
-          needs.test.result == 'success' &&
-          needs.build-and-push.result == 'success' &&
-          needs.deploy-staging.result == 'success'
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: ${{ job.status }}
-          title: "Staging Deployment"
-          description: "✅ Deployed successfully to staging!"
-          color: 0x00ff00
-          username: "GitHub Actions"
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+      - name: Detect failed job
+        id: detect
+        run: |
+          if [ "${{ needs.test.result }}" = "failure" ]; then
+            echo "job=test" >> $GITHUB_OUTPUT
+            echo "log=test-log/test.log" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
+            echo "job=build" >> $GITHUB_OUTPUT
+            echo "log=build-log/build.log" >> $GITHUB_OUTPUT
+          else
+            echo "job=deploy" >> $GITHUB_OUTPUT
+            echo "log=deploy-log/deploy.log" >> $GITHUB_OUTPUT
+          fi
 
-      - name: ❌ Notify Failure
-        if: |
-          needs.test.result == 'failure' ||
-          needs.build-and-push.result == 'failure' ||
-          needs.deploy-staging.result == 'failure'
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: 'failure'
-          title: "Staging Deployment"
-          description: "❌ Deployment failed! Please check logs."
-          color: 0xff0000
-          username: "GitHub Actions"
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+      - uses: actions/download-artifact@v4
 
+      - name: Read log
+        id: log
+        run: |
+          FILE="${{ steps.detect.outputs.log }}"
+          if [ -f "$FILE" ]; then
+            tail -n 80 "$FILE" > error.log
+          else
+            echo "No log file found." > error.log
+          fi
+
+      - name: Create GitHub Issue
+        id: issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const log = fs.readFileSync('error.log', 'utf8')
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 CI Failure • Run #${context.runNumber}`,
+              body: `
+            ## ❌ CI/CD Pipeline Failure
+
+            **Workflow** : ${context.workflow}  
+            **Failed Job** : **${process.env.FAILED_JOB || 'Unknown'}**  
+            **Branch** : \`${context.ref.replace('refs/heads/', '')}\`  
+            **Commit** : [\`${context.sha.substring(0,7)}\`](https://github.com/${context.repo.owner}/${context.repo.repo}/commit/${context.sha})  
+            **Triggered by** : @${context.actor}
+
+            ---
+
+            ## 📄 Error Log (Preview)
+            <details>
+            <summary>Click to expand</summary>
+
+            \`\`\`
+            ${log.substring(0, 1500)}
+            \`\`\`
+
+            </details>
+
+            ---
+
+            ## 🔗 Useful Links
+            - 🔍 **GitHub Actions Logs**  
+              https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+
+            - 🧾 **Full Log**  
+              Available in Discord thread
+
+            ---
+
+            ⚠️ *This issue was automatically generated by CI/CD pipeline.*
+            `,
+              labels: ['ci', 'bug', 'automation']
+            })
+
+            core.setOutput('url', issue.data.html_url)
+
+
+      - name: Send Discord message + create thread + post log
+        run: |
+          LOG=$(sed 's/"/\\"/g' error.log)
+
+          MSG=$(curl -s -X POST \
+            "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"🚨 **CI FAILURE**\\nJob: **${{ steps.detect.outputs.job }}**\\nIssue: ${{ steps.issue.outputs.url }}\"
+            }")
+
+          MID=$(echo "$MSG" | jq -r '.id')
+
+          THREAD=$(curl -s -X POST \
+            "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages/$MID/threads" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{ \"name\": \"❌ CI Failure #${{ github.run_number }}\" }")
+
+          TID=$(echo "$THREAD" | jq -r '.id')
+
+          curl -X POST \
+            "https://discord.com/api/v10/channels/$TID/messages" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{ \"content\": \"\`\`\`\n$LOG\n\`\`\`\" }"

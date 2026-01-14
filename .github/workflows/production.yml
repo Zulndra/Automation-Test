@@ -8,6 +8,12 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+permissions:
+  contents: read
+  packages: write
+  issues: write
+  pull-requests: write
+
 jobs:
   # ==========================================
   # JOB 1: TESTING
@@ -15,183 +21,188 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🟢 Setup Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-      
-      - name: 📦 Install dependencies
-        run: npm ci
-      
+          cache: npm
+
+      - run: npm ci
+
       - name: 🧪 Run tests
-        run: npm test
-      
-      - name: 🔒 Security audit
-        run: npm audit --production
-        continue-on-error: true
-      
-      - name: ✅ Tests passed
-        run: echo "✅ All tests passed!"
+        id: test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-log
+          path: test.log
+
+      - if: always()
+        run: |
+          [ "${{ steps.test.outcome }}" = "failure" ] && exit 1 || true
 
   # ==========================================
-  # JOB 2: BUILD & PUSH DOCKER IMAGE
+  # JOB 2: BUILD & PUSH IMAGE
   # ==========================================
   build-and-push:
     name: Build & Push Docker Image
     needs: test
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    
+
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      
-      - name: 🔑 Login to GHCR
-        uses: docker/login-action@v2
+      - uses: actions/checkout@v3
+
+      - uses: docker/setup-buildx-action@v2
+
+      - uses: docker/login-action@v2
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: 🏷️ Extract metadata
-        id: meta
+
+      - id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ghcr.io/${{ github.repository }}
           tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
             type=raw,value=production-latest
-            type=raw,value=latest
-      
-      - name: 🏗️ Build and push Docker image
-        uses: docker/build-push-action@v4
+            type=sha
+
+      - uses: docker/build-push-action@v4
         with:
-          context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: ✅ Image built
-        run: |
-          echo "================================"
-          echo "✅ Production image ready!"
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "================================"
 
   # ==========================================
   # JOB 3: MANUAL APPROVAL
   # ==========================================
-  approval:
-    name: Wait for Approval
+  approve-production:
+    name: ⏸️ Await Production Approval
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment: production-approval
-    
+    environment: production
+
     steps:
-      - name: ⏳ Waiting for manual approval
-        run: |
-          echo "⏳ Waiting for approval..."
-          echo "Please review and approve deployment to production"
+      - run: echo "Waiting for manual approval..."
 
   # ==========================================
-  # JOB 4: DEPLOY TO PRODUCTION
+  # JOB 4: DEPLOY PRODUCTION
   # ==========================================
   deploy-production:
     name: Deploy to Production
-    needs: approval
+    needs: approve-production
     runs-on: ubuntu-latest
-    environment: production
-    
+
     steps:
-      - name: 🚀 Deploy to Production Server
-        run: |
-          echo "================================"
-          echo "🚀 DEPLOYING TO PRODUCTION..."
-          echo "⚠️  THIS IS PRODUCTION!"
-          echo "================================"
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production-latest"
-          echo "Environment: production"
-          echo "Time: $(date)"
-          
-          # SIMULASI DEPLOY
-          # Real command (uncomment when ready):
-          # ssh user@production-server << 'EOF'
-          #   docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production-latest
-          #   docker stop my-app || true
-          #   docker rm my-app || true
-          #   docker run -d \
-          #     --name my-app \
-          #     -p 80:3000 \
-          #     -e NODE_ENV=production \
-          #     --restart unless-stopped \
-          #     ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production-latest
-          # EOF
-          
-          echo "✅ Deployment completed!"
-      
-      - name: 🧪 Production Health Check
-        run: |
-          echo "Running critical health checks..."
-          sleep 5
-          # curl --fail https://your-domain.com/health || exit 1
-          echo "✅ Production is healthy!"
-      
-      - name: ✅ Production deployment successful
-        run: |
-          echo "================================"
-          echo "🎉 PRODUCTION DEPLOYED!"
-          echo "================================"
+      - run: |
+          echo "🚀 Deploying to production..."
+          echo "✅ Deployment completed"
 
   # ==========================================
-  # JOB 5: NOTIFICATION
+  # JOB 5: SUCCESS NOTIFICATION
   # ==========================================
-  notify:
-    name: Send Notification
+  notify-success:
+    name: Success Notification
     needs: [test, build-and-push, deploy-production]
     runs-on: ubuntu-latest
-    if: always()
+    if: success()
 
     steps:
-      - name: ✅ Notify Success
-        if: |
-          needs.test.result == 'success' &&
-          needs.build-and-push.result == 'success' &&
-          needs.deploy-production.result == 'success'
-        uses: sarisia/actions-status-discord@v1
+      - uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: ${{ job.status }}
-          title: "production Deployment"
-          description: "✅ Deployed successfully to production!"
-          color: 0x00ff00
-          username: "GitHub Actions"
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+          status: success
+          title: "🚀 Production Deployment Successful"
+          description: |
+            **Environment:** `production`
+            **Branch:** `${{ github.ref_name }}`
+            **Commit:** `${{ github.sha }}`
+            **Approved & deployed successfully**
 
-      - name: ❌ Notify Failure
-        if: |
-          needs.test.result == 'failure' ||
-          needs.build-and-push.result == 'failure' ||
-          needs.deploy-production.result == 'failure'
-        uses: sarisia/actions-status-discord@v1
+            🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          color: 0x27ae60
+          username: "CI/CD Bot"
+
+  # ==========================================
+  # JOB 6: FAILURE HANDLER + THREAD
+  # ==========================================
+  handle-failure:
+    name: Handle Failure
+    needs: [test, build-and-push, deploy-production]
+    runs-on: ubuntu-latest
+    if: failure()
+
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - id: detect
+        run: |
+          if [ "${{ needs.test.result }}" = "failure" ]; then
+            echo "job=test" >> $GITHUB_OUTPUT
+            echo "log=test-log/test.log" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
+            echo "job=build" >> $GITHUB_OUTPUT
+          else
+            echo "job=deploy" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/download-artifact@v4
+
+      - run: |
+          FILE="${{ steps.detect.outputs.log }}"
+          [ -f "$FILE" ] && tail -n 80 "$FILE" > error.log || echo "No log" > error.log
+
+      - id: issue
+        uses: actions/github-script@v7
         with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: 'failure'
-          title: "production Deployment"
-          description: "❌ Deployment failed! Please check logs."
-          color: 0xff0000
-          username: "GitHub Actions"
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+          script: |
+            const fs = require('fs')
+            const log = fs.readFileSync('error.log', 'utf8')
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Production CI Failure #${context.runNumber}`,
+              body: `\`\`\`\n${log}\n\`\`\`\nhttps://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['ci','bug','production']
+            })
+
+            core.setOutput('url', issue.data.html_url)
+
+      - name: Discord Message + Thread + Log
+        run: |
+          LOG=$(sed 's/"/\\"/g' error.log)
+
+          MSG=$(curl -s -X POST \
+            "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"🚨 **PRODUCTION FAILURE**\nJob: **${{ steps.detect.outputs.job }}**\nIssue: ${{ steps.issue.outputs.url }}\"
+            }")
+
+          MID=$(echo "$MSG" | jq -r '.id')
+
+          THREAD=$(curl -s -X POST \
+            "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages/$MID/threads" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{ \"name\": \"❌ Production Failure #${{ github.run_number }}\" }")
+
+          TID=$(echo "$THREAD" | jq -r '.id')
+
+          curl -X POST \
+            "https://discord.com/api/v10/channels/$TID/messages" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{ \"content\": \"\`\`\`\n$LOG\n\`\`\`\" }"
