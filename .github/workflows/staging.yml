@@ -136,9 +136,21 @@ jobs:
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           status: 'success'
-          title: "Staging Deployment"
-          description: "✅ Deployed successfully!"
-          color: 0x00ff00
+          title: "🚀 Staging Deployment Successful"
+          description: |
+            **Deployment completed successfully!**
+
+            **Environment:** `staging`  
+            **Branch:** `${{ github.ref_name }}`  
+            **Commit:** [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})  
+            **Triggered by:** `${{ github.actor }}`
+
+            🔗 **Actions Run:**  
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          color: 0x2ecc71
+          username: "CI/CD Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
 
   # ==========================================
   # JOB 5: FAILURE HANDLER (MAIN JOB)
