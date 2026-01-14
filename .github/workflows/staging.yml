@@ -143,86 +143,86 @@ jobs:
   # ==========================================
   # JOB 5: FAILURE HANDLER (MAIN JOB)
   # ==========================================
-handle-failure:
-  name: Handle Failure
-  needs: [test, build-and-push, deploy-staging]
-  runs-on: ubuntu-latest
-  if: |
-    needs.test.result == 'failure' ||
-    needs.build-and-push.result == 'failure' ||
-    needs.deploy-staging.result == 'failure'
+  handle-failure:
+    name: Handle Failure
+    needs: [test, build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    if: |
+      needs.test.result == 'failure' ||
+      needs.build-and-push.result == 'failure' ||
+      needs.deploy-staging.result == 'failure'
 
-  permissions:
-    issues: write
-    contents: read
+    permissions:
+      issues: write
+      contents: read
 
-  steps:
-    - name: Detect failed job
-      id: detect
-      run: |
-        if [ "${{ needs.test.result }}" = "failure" ]; then
-          echo "job=test" >> $GITHUB_OUTPUT
-          echo "log=test-log/test.log" >> $GITHUB_OUTPUT
-        elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
-          echo "job=build" >> $GITHUB_OUTPUT
-          echo "log=build-log/build.log" >> $GITHUB_OUTPUT
-        else
-          echo "job=deploy" >> $GITHUB_OUTPUT
-          echo "log=deploy-log/deploy.log" >> $GITHUB_OUTPUT
-        fi
+    steps:
+      - name: Detect failed job
+        id: detect
+        run: |
+          if [ "${{ needs.test.result }}" = "failure" ]; then
+            echo "job=test" >> $GITHUB_OUTPUT
+            echo "log=test-log/test.log" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
+            echo "job=build" >> $GITHUB_OUTPUT
+            echo "log=build-log/build.log" >> $GITHUB_OUTPUT
+          else
+            echo "job=deploy" >> $GITHUB_OUTPUT
+            echo "log=deploy-log/deploy.log" >> $GITHUB_OUTPUT
+          fi
 
-    - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
 
-    - name: Read log
-      id: log
-      run: |
-        FILE="${{ steps.detect.outputs.log }}"
-        if [ -f "$FILE" ]; then
-          tail -n 80 "$FILE" > error.log
-        else
-          echo "No log file found." > error.log
-        fi
+      - name: Read log
+        id: log
+        run: |
+          FILE="${{ steps.detect.outputs.log }}"
+          if [ -f "$FILE" ]; then
+            tail -n 80 "$FILE" > error.log
+          else
+            echo "No log file found." > error.log
+          fi
 
-    - name: Create GitHub Issue
-      id: issue
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs')
-          const log = fs.readFileSync('error.log', 'utf8')
-          const issue = await github.rest.issues.create({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            title: `❌ CI Failure (${context.runNumber})`,
-            body: `### Failed Job: ${{ steps.detect.outputs.job }}\n\`\`\`\n${log}\n\`\`\`\nhttps://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-            labels: ['ci','bug']
-          })
-          core.setOutput('url', issue.data.html_url)
+      - name: Create GitHub Issue
+        id: issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const log = fs.readFileSync('error.log', 'utf8')
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `❌ CI Failure (${context.runNumber})`,
+              body: `### Failed Job: ${{ steps.detect.outputs.job }}\n\`\`\`\n${log}\n\`\`\`\nhttps://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['ci','bug']
+            })
+            core.setOutput('url', issue.data.html_url)
 
-    - name: Send Discord message + create thread + post log
-      run: |
-        LOG=$(sed 's/"/\\"/g' error.log)
+      - name: Send Discord message + create thread + post log
+        run: |
+          LOG=$(sed 's/"/\\"/g' error.log)
 
-        MSG=$(curl -s -X POST \
-          "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages" \
-          -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"content\": \"🚨 **CI FAILURE**\\nJob: **${{ steps.detect.outputs.job }}**\\nIssue: ${{ steps.issue.outputs.url }}\"
-          }")
+          MSG=$(curl -s -X POST \
+            "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"🚨 **CI FAILURE**\\nJob: **${{ steps.detect.outputs.job }}**\\nIssue: ${{ steps.issue.outputs.url }}\"
+            }")
 
-        MID=$(echo "$MSG" | jq -r '.id')
+          MID=$(echo "$MSG" | jq -r '.id')
 
-        THREAD=$(curl -s -X POST \
-          "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages/$MID/threads" \
-          -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
-          -H "Content-Type: application/json" \
-          -d "{ \"name\": \"❌ CI Failure #${{ github.run_number }}\" }")
+          THREAD=$(curl -s -X POST \
+            "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages/$MID/threads" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{ \"name\": \"❌ CI Failure #${{ github.run_number }}\" }")
 
-        TID=$(echo "$THREAD" | jq -r '.id')
+          TID=$(echo "$THREAD" | jq -r '.id')
 
-        curl -X POST \
-          "https://discord.com/api/v10/channels/$TID/messages" \
-          -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
-          -H "Content-Type: application/json" \
-          -d "{ \"content\": \"\`\`\`\n$LOG\n\`\`\`\" }"
+          curl -X POST \
+            "https://discord.com/api/v10/channels/$TID/messages" \
+            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{ \"content\": \"\`\`\`\n$LOG\n\`\`\`\" }"
