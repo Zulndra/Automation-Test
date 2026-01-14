@@ -266,7 +266,7 @@ jobs:
               fi
 
               jq -n \
-                --arg msg "❌ CI ERROR LOG ($JOB)
+                --arg msg "❌ COUNTINUOUS INTEGRATION ERROR LOG ($JOB)
 
           $LOG_CONTENT
 
@@ -276,7 +276,80 @@ jobs:
                   -d @- \
                   ${{ secrets.DISCORD_LOG_WEBHOOK }}
 
+  # ==========================================
+  # JOB 7: GitHub Issue Notification
+  # ==========================================
 
+create-issue:
+  name: Create GitHub Issue on Failure
+  needs: [test, build-and-push, deploy-staging]
+  runs-on: ubuntu-latest
+  if: |
+    needs.test.result == 'failure' ||
+    needs.build-and-push.result == 'failure' ||
+    needs.deploy-staging.result == 'failure'
 
+  steps:
+    - name: 📥 Download artifacts
+      uses: actions/download-artifact@v4
+
+    - name: 🧠 Detect failure & collect log
+      id: detect
+      run: |
+        if [ "${{ needs.test.result }}" = "failure" ]; then
+          echo "job=TEST" >> $GITHUB_OUTPUT
+          LOG="test-log/test.log"
+        elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
+          echo "job=BUILD" >> $GITHUB_OUTPUT
+          LOG="build-log/build.log"
+        elif [ "${{ needs.deploy-staging.result }}" = "failure" ]; then
+          echo "job=DEPLOY" >> $GITHUB_OUTPUT
+          LOG="deploy-log/deploy.log"
+        fi
+
+        if [ -f "$LOG" ]; then
+          tail -n 80 "$LOG" > issue.log
+        else
+          echo "No log file available.
+Failure occurred in a GitHub Action (uses: step)." > issue.log
+        fi
+
+    - name: 🐞 Create Issue
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const log = fs.readFileSync('issue.log', 'utf8');
+
+          const title = `❌ CI Failure (${process.env.JOB_NAME})`;
+          const body = `
+          
+### 🚨 CI/CD Failure Detected
+
+**Workflow:** ${context.workflow}
+**Job:** ${process.env.JOB_NAME}
+**Branch:** ${context.ref}
+**Commit:** ${context.sha}
+
+---
+
+### 📄 Error Log
+\`\`\`
+${log}
+\`\`\`
+
+🔗 **Run URL:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+          `;
+
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title,
+            body,
+            labels: ['ci', 'bug', 'automation']
+          });
+      env:
+        JOB_NAME: ${{ steps.detect.outputs.job }}
 
 
