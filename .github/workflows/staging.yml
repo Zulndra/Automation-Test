@@ -136,7 +136,7 @@ jobs:
     name: Handle Failure
     needs: [test, build-and-push, deploy-staging]
     runs-on: ubuntu-latest
-    if: |
+    if: failure()
       needs.test.result == 'failure' ||
       needs.build-and-push.result == 'failure' ||
       needs.deploy-staging.result == 'failure'
