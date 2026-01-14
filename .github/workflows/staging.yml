@@ -327,12 +327,12 @@ create-issue:
           
     ### 🚨 CI/CD Failure Detected
 
-  **Workflow:** ${context.workflow}
-  **Job:** ${process.env.JOB_NAME}
-  **Branch:** ${context.ref}
-  **Commit:** ${context.sha}
+    **Workflow:** ${context.workflow}
+    **Job:** ${process.env.JOB_NAME}
+    **Branch:** ${context.ref}
+    **Commit:** ${context.sha}
 
-    ---
+      ---
 
     ### 📄 Error Log
   \`\`\`
