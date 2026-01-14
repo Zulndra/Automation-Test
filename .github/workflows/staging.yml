@@ -36,6 +36,7 @@ jobs:
         run: npm ci
 
       - name: 🧪 Run tests
+        id: test
         run: |
           set -o pipefail
           npm test 2>&1 | tee test.log
@@ -46,6 +47,16 @@ jobs:
         with:
           name: test-log
           path: test.log
+      
+      - name: ✅ Tests result
+        if: always()
+        run: |
+          if [ "${{ steps.test.outcome }}" = "failure" ]; then
+            echo "❌ Tests failed!"
+            exit 1
+          else
+            echo "✅ All tests passed!"
+          fi
 
   # ==========================================
   # JOB 2: BUILD & PUSH DOCKER IMAGE
@@ -136,10 +147,7 @@ jobs:
     name: Handle Failure
     needs: [test, build-and-push, deploy-staging]
     runs-on: ubuntu-latest
-    if: failure()
-      needs.test.result == 'failure' ||
-      needs.build-and-push.result == 'failure' ||
-      needs.deploy-staging.result == 'failure'
+    if: failure()  # Simple: jalan kalau ada job yang fail
     
     permissions:
       issues: write
@@ -292,7 +300,7 @@ jobs:
     name: Create Discord Thread
     needs: [handle-failure]
     runs-on: ubuntu-latest
-    if: needs.handle-failure.result == 'success'
+    if: always() && needs.handle-failure.result == 'success'
     
     steps:
       - name: 📥 Download artifacts
