@@ -143,251 +143,86 @@ jobs:
   # ==========================================
   # JOB 5: FAILURE HANDLER (MAIN JOB)
   # ==========================================
-  handle-failure:
-    name: Handle Failure
-    needs: [test, build-and-push, deploy-staging]
-    runs-on: ubuntu-latest
-    if: failure()  # Simple: jalan kalau ada job yang fail
-    
-    permissions:
-      issues: write
-      contents: read
-    
-    outputs:
-      issue-number: ${{ steps.create-issue.outputs.issue-number }}
-      issue-url: ${{ steps.create-issue.outputs.issue-url }}
-      discord-message-id: ${{ steps.discord-initial.outputs.message-id }}
-      failed-job: ${{ steps.detect.outputs.failed_job }}
-    
-    steps:
-      # Step 1: Detect failed job
-      - name: 🔍 Detect failed job
-        id: detect
-        run: |
-          if [ "${{ needs.test.result }}" = "failure" ]; then
-            echo "failed_job=TEST" >> $GITHUB_OUTPUT
-          elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
-            echo "failed_job=BUILD" >> $GITHUB_OUTPUT
-          elif [ "${{ needs.deploy-staging.result }}" = "failure" ]; then
-            echo "failed_job=DEPLOY" >> $GITHUB_OUTPUT
-          fi
-      
-      # Step 2: Download artifacts (logs)
-      - name: 📥 Download artifacts
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-      
-      # Step 3: Prepare error log
-      - name: 📝 Prepare error log
-        id: prepare-log
-        run: |
-          FAILED_JOB="${{ steps.detect.outputs.failed_job }}"
-          
-          if [ -f "test-log/test.log" ]; then
-            LOG_CONTENT=$(tail -n 50 "test-log/test.log")
-          else
-            LOG_CONTENT="No log file available. Check GitHub Actions logs."
-          fi
-          
-          echo "$LOG_CONTENT" > error.log
-      
-      # Step 4: Create GitHub Issue
-      - name: 🐞 Create GitHub Issue
-        id: create-issue
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const failedJob = '${{ steps.detect.outputs.failed_job }}';
-            const errorLog = fs.readFileSync('error.log', 'utf8');
-            
-            const title = `❌ CI Failure (${failedJob}) - ${context.ref.replace('refs/heads/', '')}`;
-            const body = `### 🚨 CI/CD Pipeline Failure
-            
-            **Workflow:** ${context.workflow}
-            **Failed Job:** ${failedJob}
-            **Branch:** ${context.ref.replace('refs/heads/', '')}
-            **Commit:** [\`${context.sha.substring(0, 7)}\`](https://github.com/${context.repo.owner}/${context.repo.repo}/commit/${context.sha})
-            **Author:** @${context.actor}
-            
-            ---
-            
-            ### 📄 Error Log Preview
-            \`\`\`
-            ${errorLog.substring(0, 500)}...
-            \`\`\`
-            
-            [See full error log in Discord thread]
-            
-            ---
-            
-            ### 🔗 Links
-            - [View Full Logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
-            - [View Commit](https://github.com/${context.repo.owner}/${context.repo.repo}/commit/${context.sha})
-            `;
-            
-            const issue = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: title,
-              body: body,
-              labels: ['ci', 'bug', 'automation', 'staging']
-            });
-            
-            core.setOutput('issue-number', issue.data.number);
-            core.setOutput('issue-url', issue.data.html_url);
-            console.log(`✅ Issue created: #${issue.data.number}`);
-      
-      # Step 5: Post initial message to Discord (ini yang akan jadi thread)
-      - name: 📢 Post to Discord (Initial Message)
-        id: discord-initial
-        run: |
-          FAILED_JOB="${{ steps.detect.outputs.failed_job }}"
-          ISSUE_NUMBER="${{ steps.create-issue.outputs.issue-number }}"
-          ISSUE_URL="${{ steps.create-issue.outputs.issue-url }}"
-          
-          # Post message dan simpan message ID untuk create thread
-          RESPONSE=$(curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"content\": \"🚨 **CI/CD Failure Detected**\",
-              \"embeds\": [{
-                \"title\": \"❌ ${FAILED_JOB} Failed - Staging\",
-                \"description\": \"A failure occurred in the CI/CD pipeline.\",
-                \"color\": 15158332,
-                \"fields\": [
-                  {
-                    \"name\": \"📋 GitHub Issue\",
-                    \"value\": \"[#${ISSUE_NUMBER}](${ISSUE_URL})\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"🌿 Branch\",
-                    \"value\": \"${{ github.ref_name }}\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"👤 Author\",
-                    \"value\": \"${{ github.actor }}\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"💻 Commit\",
-                    \"value\": \"[\`${{ github.sha }}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})\",
-                    \"inline\": false
-                  },
-                  {
-                    \"name\": \"🔗 Logs\",
-                    \"value\": \"[View Full Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\",
-                    \"inline\": false
-                  }
-                ],
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\"
-              }]
-            }" \
-            ${{ secrets.DISCORD_WEBHOOK }}?wait=true)
-          
-          # Extract message ID dari response
-          MESSAGE_ID=$(echo "$RESPONSE" | jq -r '.id')
-          echo "message-id=$MESSAGE_ID" >> $GITHUB_OUTPUT
-          echo "Discord message ID: $MESSAGE_ID"
-  
-  # ==========================================
-  # JOB 6: CREATE DISCORD THREAD & POST LOGS
-  # ==========================================
-  create-discord-thread:
-    name: Create Discord Thread
-    needs: [handle-failure]
-    runs-on: ubuntu-latest
-    if: always() && needs.handle-failure.result == 'success'
-    
-    steps:
-      - name: 📥 Download artifacts
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-      
-      - name: 📝 Read error log
-        id: read-log
-        run: |
-          if [ -f "test-log/test.log" ]; then
-            LOG_CONTENT=$(cat "test-log/test.log")
-          else
-            LOG_CONTENT="No detailed log available."
-          fi
-          
-          # Save to file untuk dipakai di curl
-          echo "$LOG_CONTENT" > full-error.log
-      
-      - name: 🧵 Create Thread & Post Logs
-        run: |
-          MESSAGE_ID="${{ needs.handle-failure.outputs.discord-message-id }}"
-          FAILED_JOB="${{ needs.handle-failure.outputs.failed-job }}"
-          ISSUE_NUMBER="${{ needs.handle-failure.outputs.issue-number }}"
-          
-          # Extract webhook ID and token dari webhook URL
-          WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK }}"
-          WEBHOOK_ID=$(echo "$WEBHOOK_URL" | sed -n 's/.*webhooks\/\([0-9]*\)\/.*/\1/p')
-          WEBHOOK_TOKEN=$(echo "$WEBHOOK_URL" | sed -n 's/.*webhooks\/[0-9]*\/\(.*\)/\1/p')
-          
-          echo "Creating thread for message: $MESSAGE_ID"
-          
-          # Create thread menggunakan Discord API
-          THREAD_RESPONSE=$(curl -s -X POST \
-            "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages/${MESSAGE_ID}/threads" \
-            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"name\": \"🐛 Issue #${ISSUE_NUMBER} - ${FAILED_JOB} Failure\",
-              \"auto_archive_duration\": 1440
-            }")
-          
-          THREAD_ID=$(echo "$THREAD_RESPONSE" | jq -r '.id')
-          echo "Thread created: $THREAD_ID"
-          
-          # Baca error log
-          ERROR_LOG=$(cat full-error.log)
-          
-          # Post full error log ke thread
-          # Split jadi chunks kalau terlalu panjang (Discord limit 2000 chars)
-          echo "$ERROR_LOG" | fold -w 1900 -s | while read -r chunk; do
-            curl -X POST \
-              "https://discord.com/api/v10/channels/${THREAD_ID}/messages" \
-              -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              -d "{
-                \"content\": \"### 📄 Error Log\n\`\`\`\n${chunk}\n\`\`\`\"
-              }"
-            sleep 1
-          done
-          
-          # Post additional info
-          curl -X POST \
-            "https://discord.com/api/v10/channels/${THREAD_ID}/messages" \
-            -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"📊 Debugging Info\",
-                \"color\": 3447003,
-                \"fields\": [
-                  {
-                    \"name\": \"Failed Job\",
-                    \"value\": \"${FAILED_JOB}\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"GitHub Issue\",
-                    \"value\": \"[#${ISSUE_NUMBER}](${{ needs.handle-failure.outputs.issue-url }})\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"Actions\",
-                    \"value\": \"[View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\",
-                    \"inline\": false
-                  }
-                ]
-              }]
-            }"
-          
-          echo "✅ Thread created and logs posted!"
+handle-failure:
+  name: Handle Failure
+  needs: [test, build-and-push, deploy-staging]
+  runs-on: ubuntu-latest
+  if: |
+    needs.test.result == 'failure' ||
+    needs.build-and-push.result == 'failure' ||
+    needs.deploy-staging.result == 'failure'
+
+  permissions:
+    issues: write
+    contents: read
+
+  steps:
+    - name: Detect failed job
+      id: detect
+      run: |
+        if [ "${{ needs.test.result }}" = "failure" ]; then
+          echo "job=test" >> $GITHUB_OUTPUT
+          echo "log=test-log/test.log" >> $GITHUB_OUTPUT
+        elif [ "${{ needs.build-and-push.result }}" = "failure" ]; then
+          echo "job=build" >> $GITHUB_OUTPUT
+          echo "log=build-log/build.log" >> $GITHUB_OUTPUT
+        else
+          echo "job=deploy" >> $GITHUB_OUTPUT
+          echo "log=deploy-log/deploy.log" >> $GITHUB_OUTPUT
+        fi
+
+    - uses: actions/download-artifact@v4
+
+    - name: Read log
+      id: log
+      run: |
+        FILE="${{ steps.detect.outputs.log }}"
+        if [ -f "$FILE" ]; then
+          tail -n 80 "$FILE" > error.log
+        else
+          echo "No log file found." > error.log
+        fi
+
+    - name: Create GitHub Issue
+      id: issue
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs')
+          const log = fs.readFileSync('error.log', 'utf8')
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `❌ CI Failure (${context.runNumber})`,
+            body: `### Failed Job: ${{ steps.detect.outputs.job }}\n\`\`\`\n${log}\n\`\`\`\nhttps://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            labels: ['ci','bug']
+          })
+          core.setOutput('url', issue.data.html_url)
+
+    - name: Send Discord message + create thread + post log
+      run: |
+        LOG=$(sed 's/"/\\"/g' error.log)
+
+        MSG=$(curl -s -X POST \
+          "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages" \
+          -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"content\": \"🚨 **CI FAILURE**\\nJob: **${{ steps.detect.outputs.job }}**\\nIssue: ${{ steps.issue.outputs.url }}\"
+          }")
+
+        MID=$(echo "$MSG" | jq -r '.id')
+
+        THREAD=$(curl -s -X POST \
+          "https://discord.com/api/v10/channels/${{ secrets.DISCORD_CHANNEL_ID }}/messages/$MID/threads" \
+          -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d "{ \"name\": \"❌ CI Failure #${{ github.run_number }}\" }")
+
+        TID=$(echo "$THREAD" | jq -r '.id')
+
+        curl -X POST \
+          "https://discord.com/api/v10/channels/$TID/messages" \
+          -H "Authorization: Bot ${{ secrets.DISCORD_BOT_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d "{ \"content\": \"\`\`\`\n$LOG\n\`\`\`\" }"
